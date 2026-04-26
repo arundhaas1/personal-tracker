@@ -2099,6 +2099,7 @@ function setJobsPage(p)       { jobsPage = p; renderNewJobsPanel(); }
 function setJobsPageSize(n)   { jobsPageSize = parseInt(n) || 25; jobsPage = 1; renderNewJobsPanel(); }
 function toggleAllRoles(val)  { state.showAllRolesPerCompany = val; saveState(); resetJobsPage(); renderNewJobsPanel(); }
 function toggleAllJobs(val)   { state.showAllJobs = val; saveState(); resetJobsPage(); renderNewJobsPanel(); }
+function toggleJobsPanel()    { state.jobsPanelCollapsed = !state.jobsPanelCollapsed; saveState(); renderNewJobsPanel(); }
 
 function renderNewJobsPanel() {
   const el = document.getElementById("newJobsPanel");
@@ -2134,18 +2135,31 @@ function renderNewJobsPanel() {
     ? `Showing all detected jobs · top 2 per company`
     : `Best 1–2 backend roles per company · ${hiddenCount} non-backend hidden${collapsedCount > 0 ? ` · ${collapsedCount} extras collapsed` : ''}`;
 
+  // Default-collapsed: panel is hidden by default unless user explicitly expands
+  // (so the apps page isn't dominated by the auto-detected jobs feed)
+  if (state.jobsPanelCollapsed === undefined) state.jobsPanelCollapsed = true;
+  const collapsed = state.jobsPanelCollapsed === true;
+  const chevron = collapsed ? '▸' : '▾';
+
   let html = `<div class="grid-panel" style="border-color:#7b1fa2;">
-    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap;">
-      <div>
-        <h3 style="color:#7b1fa2;">${headerLabel}</h3>
-        <div class="sub">${subLabel}</div>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; cursor:pointer;" onclick="toggleJobsPanel()">
+      <div style="flex:1;">
+        <h3 style="color:#7b1fa2; user-select:none;">${chevron} ${headerLabel}</h3>
+        <div class="sub">${subLabel}${collapsed ? ' · click to expand' : ''}</div>
       </div>
-      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      ${collapsed ? '' : `<div style="display:flex; gap:6px; flex-wrap:wrap;" onclick="event.stopPropagation();">
         <button class="mini-btn" onclick="toggleAllRoles(${!showAllRoles})">${showAllRoles ? 'Top 2 per company' : 'Show all roles per company'}</button>
         <button class="mini-btn" onclick="toggleAllJobs(${!showAll})">${showAll ? 'Backend only' : 'Show SRE/frontend too'}</button>
-      </div>
-    </div>
-    <table class="apps-table" style="border:none; margin-top:10px;"><thead><tr><th style="width:120px;">Company</th><th>Title</th><th style="width:160px;">Location</th><th style="width:115px;">Match</th><th style="width:130px;">Actions</th></tr></thead><tbody>`;
+      </div>`}
+    </div>`;
+
+  if (collapsed) {
+    html += `</div>`;
+    el.innerHTML = html;
+    return;
+  }
+
+  html += `<table class="apps-table" style="border:none; margin-top:10px;"><thead><tr><th style="width:120px;">Company</th><th>Title</th><th style="width:160px;">Location</th><th style="width:115px;">Match</th><th style="width:130px;">Actions</th></tr></thead><tbody>`;
   pageJobs.forEach(j => {
     const score = j._score || 0;
     let matchBadge = "";
