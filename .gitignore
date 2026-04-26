@@ -1,0 +1,8 @@
+.DS_Store
+automation/
+distributed-kv-store/
+interview-questions.md
+data1/
+*.log
+.idea/
+.vscode/
