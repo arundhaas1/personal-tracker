@@ -362,6 +362,7 @@
   <!-- ============ HEALTH VIEW ============ -->
   <div class="view hidden" id="view-health">
     <div class="stats-row" id="healthStats" style="margin-bottom:18px;"></div>
+    <div id="mealPanel" style="margin-bottom:18px;"></div>
     <div id="weightPanel" style="margin-bottom:18px;"></div>
     <h3 style="color:var(--gold); font-size:14px; text-transform:uppercase; letter-spacing:0.5px; margin:0 0 8px;">Today's habits</h3>
     <div id="healthToday"></div>
@@ -710,9 +711,8 @@ const DAY_0 = {
 };
 
 // Daily recurring habits
+// Note: Protein + Calories removed — the 🍽️ Macros panel in Health view tracks them via per-meal logging.
 const HABITS = [
-  { id: "protein",  label: "Protein — 120g",                meta: "cut" },
-  { id: "calories", label: "Calories — 1,900 kcal",          meta: "cut" },
   { id: "water",    label: "Water — 3 L",                    meta: "" },
   { id: "steps",    label: "8,000+ steps",                   meta: "" },
   { id: "reading",  label: "Read 10 pages — Mindset (Dweck)",meta: "📖" },
@@ -1212,6 +1212,8 @@ function loadState() {
   catch (e) { return defaultState(); }
   // Migration: ensure new fields exist for users with older state shape
   if (!s.weights) s.weights = {};
+  if (!s.meals) s.meals = {};   // { 'YYYY-MM-DD': [ { id, name, protein, calories, time } ] }
+  if (!s.macroTargets) s.macroTargets = { protein: 120, calories: 1900 };
   if (!('weightGoal' in s)) s.weightGoal = null;
   if (!s.storyNotes) s.storyNotes = {};
   if (!s.storyDrafts) s.storyDrafts = {};
@@ -1308,6 +1310,33 @@ function getTodayDayNum() {
 function kInt(day, idx)   { return `i_${day}_${idx}`; }
 function kDsa(day, idx)   { return `d_${day}_${idx}`; }
 function kHabit(day, id)  { return `h_${day}_${id}`; }
+
+// Auto-derive protein/calories habit checks from logged meals for that day.
+// Falls back to the manual checkbox state when no meal data exists.
+function dateKeyForDay(day) {
+  const d = getDayDate(day);
+  if (!d) return null;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+function isHabitChecked(day, habitId) {
+  const manual = !!state.tasks[kHabit(day, habitId)];
+  if (habitId !== 'protein' && habitId !== 'calories') return manual;
+  const dk = dateKeyForDay(day);
+  if (!dk) return manual;
+  const meals = (state.meals && state.meals[dk]) || [];
+  if (meals.length === 0) return manual; // no meal data → respect manual toggle
+  const targets = state.macroTargets || { protein: 120, calories: 1900 };
+  if (habitId === 'protein') {
+    const total = meals.reduce((s, m) => s + (m.protein || 0), 0);
+    return total >= targets.protein;
+  }
+  // calories: hit if at least one meal logged AND total <= target (within deficit)
+  const totalCal = meals.reduce((s, m) => s + (m.calories || 0), 0);
+  return meals.length > 0 && totalCal <= targets.calories;
+}
 function kGym(day, id)    { return `g_${day}_${id}`; }
 function kStudy(day)      { return `s_${day}`; }
 function kSd(day, idx)    { return `sd_${day}_${idx}`; }
@@ -1340,7 +1369,7 @@ function catProgress(day, cat) {
     return { total, done };
   }
   if (cat === "habits") {
-    return { total: HABITS.length, done: HABITS.filter(h => isChecked(kHabit(day, h.id))).length };
+    return { total: HABITS.length, done: HABITS.filter(h => isHabitChecked(day, h.id)).length };
   }
   if (cat === "gym") {
     if (isRestDay(day)) return { total: 0, done: 0, rest: true };
@@ -1533,7 +1562,7 @@ function renderDayDetails() {
     const id = cardId(day, "habits");
     const hdr = catHeader(id, "🍎", "Daily Habits — Cut Phase", habP);
     let inner = `<ul class="tasks" style="padding: 4px 16px 10px;">`;
-    const sorted = HABITS.map(h => ({ h, k: kHabit(day, h.id), done: isChecked(kHabit(day, h.id)) }));
+    const sorted = HABITS.map(h => ({ h, k: kHabit(day, h.id), done: isHabitChecked(day, h.id) }));
     sorted.sort((a, b) => (a.done?1:0) - (b.done?1:0));
     sorted.forEach(r => { inner += `<li class="${r.done?'done':''}" data-key="${r.k}"><input type="checkbox" ${r.done?'checked':''} onchange="handleCheck(this)"><label>${r.h.label}</label>${r.h.meta?`<span class="task-meta">${r.h.meta}</span>`:''}</li>`; });
     inner += `</ul>`;
@@ -2669,6 +2698,155 @@ function savePrompt(week, idx, val) {
 }
 
 ////////////////////////////////////////////////////////////////////////
+// MEAL / MACRO LOGGING
+////////////////////////////////////////////////////////////////////////
+function nowTimeStr() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function todayMeals() {
+  if (!state.meals) state.meals = {};
+  const k = todayDateKey();
+  if (!state.meals[k]) state.meals[k] = [];
+  return state.meals[k];
+}
+function mealsForDate(dateKey) {
+  if (!state.meals) state.meals = {};
+  return state.meals[dateKey] || [];
+}
+function logMeal() {
+  const nameEl = document.getElementById('mealNameInput');
+  const protEl = document.getElementById('mealProteinInput');
+  const calEl = document.getElementById('mealCaloriesInput');
+  const name = (nameEl.value || '').trim();
+  const protein = parseFloat(protEl.value);
+  const calories = parseFloat(calEl.value);
+  if (!name) { alert('Meal name required'); return; }
+  if (isNaN(protein) || protein < 0) { alert('Protein (g) required, e.g. 35'); return; }
+  if (isNaN(calories) || calories < 0) { alert('Calories required, e.g. 450'); return; }
+  const meals = todayMeals();
+  meals.push({
+    id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+    time: nowTimeStr(),
+    name,
+    protein: Math.round(protein * 10) / 10,
+    calories: Math.round(calories)
+  });
+  saveState();
+  nameEl.value = '';
+  protEl.value = '';
+  calEl.value = '';
+  nameEl.focus();
+  renderHealthView();
+}
+function deleteMeal(id) {
+  const meals = todayMeals();
+  const idx = meals.findIndex(m => m.id === id);
+  if (idx >= 0) {
+    meals.splice(idx, 1);
+    saveState();
+    renderHealthView();
+  }
+}
+function setMacroTarget(kind) {
+  const cur = (state.macroTargets || {})[kind] || (kind === 'protein' ? 120 : 1900);
+  const v = prompt(`Target ${kind}? Current: ${cur}`, cur);
+  if (v == null) return;
+  const num = parseFloat(v);
+  if (isNaN(num) || num <= 0) { alert('Invalid number'); return; }
+  if (!state.macroTargets) state.macroTargets = { protein: 120, calories: 1900 };
+  state.macroTargets[kind] = Math.round(num);
+  saveState();
+  renderHealthView();
+}
+function buildMealPanelHtml() {
+  const meals = todayMeals();
+  const targets = state.macroTargets || { protein: 120, calories: 1900 };
+  const totalProtein  = meals.reduce((s, m) => s + (m.protein || 0), 0);
+  const totalCalories = meals.reduce((s, m) => s + (m.calories || 0), 0);
+  const proteinPct  = Math.min(100, Math.round((totalProtein  / targets.protein)  * 100));
+  const caloriesPct = Math.min(100, Math.round((totalCalories / targets.calories) * 100));
+  const proteinColor  = totalProtein  >= targets.protein  ? '#2e7d32' : (totalProtein  >= targets.protein  * 0.75 ? '#d4a017' : '#c62828');
+  const caloriesColor = totalCalories <= targets.calories ? '#2e7d32' : '#c62828';
+  const escape = (str) => (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  // Header stat tiles
+  const stats = `
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:12px;">
+      <div class="stat" style="cursor:pointer;" onclick="setMacroTarget('protein')" title="Click to change target">
+        <div class="label">Protein (g)</div>
+        <div class="value" style="color:${proteinColor};">${totalProtein.toFixed(1)} <span style="color:var(--muted); font-weight:600; font-size:14px;">/ ${targets.protein}</span></div>
+        <div style="margin-top:4px; height:5px; background:#f0e8d0; border-radius:3px; overflow:hidden;"><div style="height:100%; width:${proteinPct}%; background:${proteinColor}; transition:width 0.3s;"></div></div>
+      </div>
+      <div class="stat" style="cursor:pointer;" onclick="setMacroTarget('calories')" title="Click to change target">
+        <div class="label">Calories</div>
+        <div class="value" style="color:${caloriesColor};">${totalCalories} <span style="color:var(--muted); font-weight:600; font-size:14px;">/ ${targets.calories}</span></div>
+        <div style="margin-top:4px; height:5px; background:#f0e8d0; border-radius:3px; overflow:hidden;"><div style="height:100%; width:${caloriesPct}%; background:${caloriesColor}; transition:width 0.3s;"></div></div>
+      </div>
+      <div class="stat">
+        <div class="label">Meals today</div>
+        <div class="value">${meals.length}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Remaining</div>
+        <div class="value" style="font-size:13px;">P: <b>${Math.max(0, targets.protein - totalProtein).toFixed(0)}g</b> · C: <b>${Math.max(0, targets.calories - totalCalories)}</b></div>
+      </div>
+    </div>
+  `;
+
+  // Input row
+  const inputRow = `
+    <div style="display:grid; grid-template-columns: 2fr 1fr 1fr auto; gap:8px; align-items:end; margin-bottom:12px;">
+      <div>
+        <label style="display:block; font-size:11px; color:var(--muted); text-transform:uppercase; font-weight:700; letter-spacing:0.4px; margin-bottom:4px;">Meal</label>
+        <input id="mealNameInput" type="text" placeholder="e.g. Chicken curry + rice" style="width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:5px; font-size:13px; font-family:inherit;" onkeydown="if(event.key==='Enter')logMeal()">
+      </div>
+      <div>
+        <label style="display:block; font-size:11px; color:var(--muted); text-transform:uppercase; font-weight:700; letter-spacing:0.4px; margin-bottom:4px;">Protein (g)</label>
+        <input id="mealProteinInput" type="number" step="0.1" min="0" placeholder="35" style="width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:5px; font-size:13px; font-family:inherit;" onkeydown="if(event.key==='Enter')logMeal()">
+      </div>
+      <div>
+        <label style="display:block; font-size:11px; color:var(--muted); text-transform:uppercase; font-weight:700; letter-spacing:0.4px; margin-bottom:4px;">Calories</label>
+        <input id="mealCaloriesInput" type="number" step="1" min="0" placeholder="450" style="width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:5px; font-size:13px; font-family:inherit;" onkeydown="if(event.key==='Enter')logMeal()">
+      </div>
+      <button class="primary-btn" onclick="logMeal()">Log</button>
+    </div>
+  `;
+
+  // Today's meal list
+  let list = '';
+  if (meals.length === 0) {
+    list = `<div style="padding:14px; background:#fafaf7; border:1px dashed var(--border); border-radius:6px; text-align:center; color:var(--muted); font-size:12px;">No meals logged today. Press Enter or click Log to add one.</div>`;
+  } else {
+    list = `<table style="width:100%; border-collapse:collapse; font-size:13px;"><thead><tr>
+      <th style="text-align:left; padding:6px 8px; background:var(--gold-bg); color:var(--gold); font-size:10px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; width:60px;">Time</th>
+      <th style="text-align:left; padding:6px 8px; background:var(--gold-bg); color:var(--gold); font-size:10px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700;">Meal</th>
+      <th style="text-align:right; padding:6px 8px; background:var(--gold-bg); color:var(--gold); font-size:10px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; width:70px;">Protein</th>
+      <th style="text-align:right; padding:6px 8px; background:var(--gold-bg); color:var(--gold); font-size:10px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; width:80px;">Calories</th>
+      <th style="background:var(--gold-bg); width:36px;"></th>
+    </tr></thead><tbody>`;
+    meals.slice().reverse().forEach(m => {
+      list += `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:7px 8px; color:var(--muted); font-variant-numeric:tabular-nums;">${escape(m.time || '')}</td>
+        <td style="padding:7px 8px; font-weight:500;">${escape(m.name)}</td>
+        <td style="padding:7px 8px; text-align:right; font-variant-numeric:tabular-nums;">${(m.protein || 0).toFixed(1)} g</td>
+        <td style="padding:7px 8px; text-align:right; font-variant-numeric:tabular-nums;">${m.calories || 0}</td>
+        <td style="padding:7px 8px; text-align:center;"><button class="icon-btn delete" title="Delete meal" onclick="deleteMeal('${m.id}')">×</button></td>
+      </tr>`;
+    });
+    list += `</tbody></table>`;
+  }
+
+  return `<div class="grid-panel">
+    <h3>🍽️ Macros — today</h3>
+    <div class="sub">Log every meal as you eat it. Targets shown are daily — click a tile to edit.</div>
+    ${stats}
+    ${inputRow}
+    ${list}
+  </div>`;
+}
+
+////////////////////////////////////////////////////////////////////////
 // WEIGHT TRACKING
 ////////////////////////////////////////////////////////////////////////
 function todayDateKey() {
@@ -2815,7 +2993,7 @@ function renderHealthView() {
   let habitStats = {};
   HABITS.forEach(h => habitStats[h.id] = 0);
   for (let d = 1; d <= today; d++) {
-    HABITS.forEach(h => { if (isChecked(kHabit(d, h.id))) habitStats[h.id]++; });
+    HABITS.forEach(h => { if (isHabitChecked(d, h.id)) habitStats[h.id]++; });
   }
   let gymDone = 0, gymTotal = 0;
   for (let d = 1; d <= today; d++) {
@@ -2827,6 +3005,8 @@ function renderHealthView() {
     `<div class="stat"><div class="label">${h.label.split('—')[0].trim()}</div><div class="value">${habitStats[h.id]}/${today}</div></div>`
   ).join('') + `<div class="stat"><div class="label">Gym</div><div class="value">${gymDone}/${gymTotal}</div></div>`;
 
+  const mealEl = document.getElementById("mealPanel");
+  if (mealEl) mealEl.innerHTML = buildMealPanelHtml();
   document.getElementById("weightPanel").innerHTML = buildWeightPanelHtml();
   document.getElementById("healthToday").innerHTML = buildDayHealthBlock(state.selectedDay);
 }
@@ -2854,7 +3034,7 @@ function buildDayHealthBlock(day) {
   const id = cardId(day, "habits_h");
   const hdr = catHeader(id, "🍎", "Daily Habits", habP);
   let inner = `<ul class="tasks" style="padding:4px 16px 10px;">`;
-  const sorted = HABITS.map(h => ({ h, k: kHabit(day, h.id), done: isChecked(kHabit(day, h.id)) }));
+  const sorted = HABITS.map(h => ({ h, k: kHabit(day, h.id), done: isHabitChecked(day, h.id) }));
   sorted.sort((a, b) => (a.done?1:0) - (b.done?1:0));
   sorted.forEach(r => { inner += `<li class="${r.done?'done':''}" data-key="${r.k}"><input type="checkbox" ${r.done?'checked':''} onchange="handleCheck(this)"><label>${r.h.label}</label>${r.h.meta?`<span class="task-meta">${r.h.meta}</span>`:''}</li>`; });
   inner += `</ul>`;
