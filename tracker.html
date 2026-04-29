@@ -2169,7 +2169,9 @@ function renderNewJobsPanel() {
   const all = (state.remoteJobs || []).filter(j => !(state.dismissedJobs || {})[j.ID]);
   const relevant = all.filter(isRelevantJob);
   const filtered = showAll ? all : relevant;
-  const jobs = showAllRoles ? filtered : topNPerCompany(filtered, 2);
+  // If user explicitly picked a larger page size, drop the per-company cap so the dropdown is honored.
+  // Otherwise default to top 2 per company to keep the panel scannable.
+  const jobs = (showAllRoles || jobsPageSize >= 50) ? filtered : topNPerCompany(filtered, 2);
   const hiddenCount = all.length - relevant.length;
   const collapsedCount = filtered.length - jobs.length;
   if (jobs.length === 0 && all.length === 0) {
