@@ -274,6 +274,7 @@
     <button class="tab" data-view="health">🏋️ Health</button>
     <button class="tab" data-view="study">📚 Study</button>
     <button class="tab" data-view="kv">🗺️ KV Roadmap</button>
+    <button class="tab" data-view="notifier">🔔 Notifier Roadmap</button>
   </div>
 
   <!-- ============ OVERVIEW VIEW ============ -->
@@ -384,6 +385,16 @@
       <div class="sub">Pre-plan foundation work — already in progress. Repo: <a href="https://github.com/arundhaas1/distributed-kv-store" target="_blank">github.com/arundhaas1/distributed-kv-store</a></div>
       <div class="kv-summary" id="kvSummary"></div>
       <table class="kv-table" id="kvTable"></table>
+    </div>
+  </div>
+
+  <!-- ============ NOTIFIER VIEW ============ -->
+  <div class="view hidden" id="view-notifier">
+    <div class="grid-panel">
+      <h3>🔔 Real-time Notifier — 14-Day Roadmap</h3>
+      <div class="sub">Event-driven fanout · WebSockets · Redis pub/sub · at-least-once replay. Repo: <a href="https://github.com/arundhaas1/realtime-notifier" target="_blank">github.com/arundhaas1/realtime-notifier</a></div>
+      <div class="kv-summary" id="notifierSummary"></div>
+      <table class="kv-table" id="notifierTable"></table>
     </div>
   </div>
 
@@ -1203,6 +1214,24 @@ Object.entries(KV_TASK_LINKS).forEach(([phaseDay, { taskIndices, kvDay }]) => {
   KV_DAY_TO_TASKS[kvDay] = { phaseDay: parseInt(phaseDay), taskIndices };
 });
 
+// Real-time Notifier 14-day roadmap (mirrors README.md in arundhaas1/realtime-notifier)
+const NOTIFIER_ROADMAP = [
+  { day:1,  title:"Project scaffold + README" },
+  { day:2,  title:"WebSocket endpoint (single node)" },
+  { day:3,  title:"In-process pub/sub fanout" },
+  { day:4,  title:"Redis pub/sub integration (multi-node)" },
+  { day:5,  title:"Channel/topic model + subscribe API" },
+  { day:6,  title:"Bounded outbound queue per client" },
+  { day:7,  title:"Backpressure policy (drop-oldest + disconnect)" },
+  { day:8,  title:"At-least-once replay buffer" },
+  { day:9,  title:"Reconnect + resume protocol" },
+  { day:10, title:"Auth handshake (token on connect)" },
+  { day:11, title:"Concurrency + load test harness" },
+  { day:12, title:"Benchmarks (connections, msgs/sec, latency)" },
+  { day:13, title:"Failure tests (Redis down, slow consumer, kill -9)" },
+  { day:14, title:"Architecture diagram + final README" }
+];
+
 ////////////////////////////////////////////////////////////////////////
 // STATE
 ////////////////////////////////////////////////////////////////////////
@@ -1242,6 +1271,8 @@ function loadState() {
     const allDone = link.taskIndices.every(i => !!s.tasks[`i_${phaseDay}_${i}`]);
     if (allDone) s.kvProgress[link.kvDay] = 'shipped';
   });
+  // Notifier progress — independent 14-day roadmap, no auto-seed
+  if (!s.notifierProgress) s.notifierProgress = {};
   return s;
 }
 function nextMonday() {
@@ -3191,6 +3222,102 @@ function renderKVView() {
 }
 
 ////////////////////////////////////////////////////////////////////////
+// RENDER — Notifier view
+////////////////////////////////////////////////////////////////////////
+function notifierStatus(day) {
+  return (state.notifierProgress && state.notifierProgress[day] === 'shipped') ? 'shipped' : '';
+}
+function toggleNotifierShipped(day) {
+  if (!state.notifierProgress) state.notifierProgress = {};
+  if (state.notifierProgress[day] === 'shipped') delete state.notifierProgress[day];
+  else state.notifierProgress[day] = 'shipped';
+  saveState();
+  renderNotifierView();
+}
+function shipNextNotifierDay() {
+  const next = NOTIFIER_ROADMAP.find(k => notifierStatus(k.day) !== 'shipped');
+  if (!next) { alert('All 14 notifier days shipped! 🎉'); return; }
+  if (!state.notifierProgress) state.notifierProgress = {};
+  state.notifierProgress[next.day] = 'shipped';
+  saveState();
+  renderNotifierView();
+}
+function renderNotifierView() {
+  const shippedCount = NOTIFIER_ROADMAP.filter(k => notifierStatus(k.day) === 'shipped').length;
+  const total = NOTIFIER_ROADMAP.length;
+  const pct = Math.round(shippedCount / total * 100);
+  const nextPending = NOTIFIER_ROADMAP.find(k => notifierStatus(k.day) !== 'shipped');
+
+  document.getElementById("notifierSummary").innerHTML = `
+    <div style="grid-column: 1 / -1; padding:14px 16px; background:linear-gradient(135deg, #fffbf0 0%, #fffdf6 100%); border:1px solid var(--gold-soft); border-radius:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; flex-wrap:wrap; gap:10px;">
+        <div>
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;">Roadmap progress</div>
+          <div style="font-size:24px; font-weight:800; color:var(--ink); margin-top:2px;">${shippedCount}<span style="color:var(--muted); font-weight:600; font-size:18px;"> / ${total}</span> <span style="font-size:14px; color:var(--gold); font-weight:700; margin-left:6px;">${pct}%</span></div>
+        </div>
+        <div style="text-align:right; font-size:12px; color:var(--muted);">
+          ${nextPending ? `Next: <span style="color:var(--ink); font-weight:700;">Day ${nextPending.day} — ${nextPending.title}</span>` : '<span style="color:#2e7d32; font-weight:700;">🎉 All ' + total + ' days shipped</span>'}
+        </div>
+      </div>
+      <div style="height:8px; background:#f0e8d0; border-radius:4px; overflow:hidden;">
+        <div style="height:100%; width:${pct}%; background:linear-gradient(90deg, #d4a017, #f4c430); transition:width 0.3s ease; border-radius:4px;"></div>
+      </div>
+    </div>
+  `;
+
+  let html = `<thead><tr>
+    <th style="width:60px; text-align:center;">Day</th>
+    <th>Milestone</th>
+    <th style="width:120px; text-align:right; padding-right:14px;">Done</th>
+  </tr></thead><tbody>`;
+
+  NOTIFIER_ROADMAP.forEach(k => {
+    const isShipped = notifierStatus(k.day) === 'shipped';
+    const rowBg     = isShipped ? '#f1f8f4' : 'transparent';
+    const dayBg     = isShipped ? '#2e7d32' : '#e8e1cd';
+    const dayFg     = isShipped ? 'white'   : 'var(--muted)';
+    const titleColor = isShipped ? '#1b5e20' : 'var(--ink)';
+    const titleStrike = isShipped ? 'text-decoration:line-through; text-decoration-color:#a5d6a7;' : '';
+
+    const checkbox = `
+      <button onclick="event.stopPropagation(); toggleNotifierShipped(${k.day})" title="${isShipped ? 'Unmark' : 'Mark as completed'}"
+        style="width:30px; height:30px; border-radius:50%; border:2px solid ${isShipped ? '#2e7d32' : 'var(--border)'};
+               background:${isShipped ? '#2e7d32' : 'white'}; color:${isShipped ? 'white' : 'transparent'};
+               font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; line-height:1;
+               display:inline-flex; align-items:center; justify-content:center; transition:all 0.15s;">
+        ${isShipped ? '✓' : ''}
+      </button>`;
+
+    html += `<tr style="background:${rowBg}; border-bottom:1px solid #f0ebde; cursor:pointer;" onclick="toggleNotifierShipped(${k.day})">
+      <td style="text-align:center; padding:10px 8px;">
+        <span style="display:inline-block; width:30px; height:30px; line-height:30px; background:${dayBg}; color:${dayFg}; border-radius:50%; font-size:12px; font-weight:700;">${k.day}</span>
+      </td>
+      <td style="padding:10px 12px; color:${titleColor}; font-weight:${isShipped ? '600' : '500'}; ${titleStrike}">
+        ${k.title}
+      </td>
+      <td style="text-align:right; padding:10px 14px;">${checkbox}</td>
+    </tr>`;
+  });
+  html += `</tbody>`;
+  document.getElementById("notifierTable").innerHTML = html;
+
+  const tableEl = document.getElementById("notifierTable");
+  let toolbar = document.getElementById("notifierToolbar");
+  if (!toolbar) {
+    toolbar = document.createElement('div');
+    toolbar.id = 'notifierToolbar';
+    toolbar.style.cssText = 'display:flex; gap:8px; align-items:center; margin:14px 0 10px; flex-wrap:wrap;';
+    tableEl.parentNode.insertBefore(toolbar, tableEl);
+  }
+  const allShipped = shippedCount === total;
+  toolbar.innerHTML = `
+    <button class="primary-btn" ${allShipped ? 'disabled' : ''} onclick="shipNextNotifierDay()" style="${allShipped ? 'opacity:0.4; cursor:default;' : ''}">⚡ Mark next done</button>
+    <button class="mini-btn" onclick="if(confirm('Reset all Notifier progress? This cannot be undone.')) { state.notifierProgress = {}; saveState(); renderNotifierView(); }">↺ Reset</button>
+    <span style="font-size:11px; color:var(--muted); margin-left:auto;">Click row or ✓ to toggle</span>
+  `;
+}
+
+////////////////////////////////////////////////////////////////////////
 // RENDER — header stats
 ////////////////////////////////////////////////////////////////////////
 function renderHeaderStats() {
@@ -3511,12 +3638,13 @@ function renderAll() {
   if (active === "health") renderHealthView();
   if (active === "study") renderStudyView();
   if (active === "kv") renderKVView();
+  if (active === "notifier") renderNotifierView();
 }
 
 ////////////////////////////////////////////////////////////////////////
 // VIEW SWITCH (hash-based routing — bookmarkable URLs)
 ////////////////////////////////////////////////////////////////////////
-const VALID_VIEWS = ["overview", "interview", "apps", "prep", "health", "study", "kv"];
+const VALID_VIEWS = ["overview", "interview", "apps", "prep", "health", "study", "kv", "notifier"];
 const DEFAULT_VIEW = "overview";
 
 function viewFromHash() {

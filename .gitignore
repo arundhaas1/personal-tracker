@@ -1,6 +1,7 @@
 .DS_Store
 automation/
 distributed-kv-store/
+realtime-notifier/
 interview-questions.md
 data1/
 *.log
