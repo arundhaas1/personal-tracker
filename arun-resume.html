@@ -301,7 +301,7 @@
   <header>
     <h1 class="name">Arun R</h1>
     <p class="title">Backend Software Engineer</p>
-    <p class="tagline">Java · Multi-Tenant SaaS · Distributed Systems · LLM-Powered Developer Tooling · 3+ yrs</p>
+    <p class="tagline">Java · Multi-Tenant SaaS · LLM-Powered Developer Tooling · Backend Architecture · 3+ yrs</p>
     <p class="profile">Backend engineer at <b>Zoho Desk</b> owning critical-path APIs in a multi-tenant SaaS (<b>100K+ tenants</b>). Shipped an AI refactoring agent that cut legacy-code migrations by <b>~95%</b>, a delta-write rewrite that dropped hot-path latency by <b>40%</b>, and owned the <b>OWASP ZAP CI/CD security rollout</b> — mentoring 4 engineers through it.</p>
 
     <div class="contact">
@@ -349,7 +349,7 @@
         Shipped an <strong class="metric">AI refactoring agent (Claude API)</strong> that cut legacy-component migration from <strong class="metric">~2 months to 2–3 days (~95% faster)</strong>; now the team's default tooling for decoupling work and requested on-demand across Zoho Desk. Replaced a chunk-commit workflow that previously required weeks of cross-team conflict resolution.
       </li>
       <li>
-        Re-architected configuration persistence from full-snapshot to <strong class="metric">delta-based writes</strong> on a hot-path API hit during every Desk session init across <strong class="metric">100K+ business tenants</strong>; cut <strong class="metric">average latency 200ms → 120ms (−40%)</strong> and <strong class="metric">DB write volume by 60%</strong>. Validated across internal APM, load benchmarks, and senior review.
+        Re-architected <strong class="metric">high-throughput config persistence</strong> on a multi-tenant hot path serving <strong class="metric">100K+ business tenants</strong>; replaced full-snapshot writes with a <strong class="metric">delta-write protocol</strong> — cut <strong class="metric">average latency 200ms → 120ms (−40%)</strong> and <strong class="metric">DB write volume by 60%</strong>. Validated across internal APM, load benchmarks, and senior review.
       </li>
       <li>
         Owned the <strong class="metric">integration of Zoho Canvas</strong> (tenant-configurable UI layout engine) into Desk's ticket-detail path; <strong class="metric">designed the entity-relationship DB schema</strong> mapping Desk entities to Canvas configs, wired the framework into Desk, and consumed Canvas APIs for layout retrieval. Led cross-team onboarding with the Canvas team; pre-GA rollout via corp portal.
@@ -414,7 +414,7 @@
       <dd>REST API Design, Microservices, Event-Driven Architecture, Multi-Tenant SaaS, Concurrency (thread pools, locks, async), Design Patterns, Caching Strategies</dd>
 
       <dt>Frontend</dt>
-      <dd>React, JavaScript (shipped ~40% of day-to-day work on client-side)</dd>
+      <dd>React, JavaScript (frontend on owned features — full-stack capable; backend-primary)</dd>
 
       <dt>Data &amp; Infra</dt>
       <dd>MySQL (schema design, query optimization), Redis (pub/sub, caching), Firebase</dd>
