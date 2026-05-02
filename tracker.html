@@ -273,8 +273,8 @@
     <button class="tab" data-view="prep">🎯 Prep</button>
     <button class="tab" data-view="health">🏋️ Health</button>
     <button class="tab" data-view="study">📚 Study</button>
-    <button class="tab" data-view="kv">🗺️ KV Roadmap</button>
     <button class="tab" data-view="notifier">🔔 Notifier Roadmap</button>
+    <button class="tab" data-view="completed">✅ Completed</button>
   </div>
 
   <!-- ============ OVERVIEW VIEW ============ -->
@@ -378,13 +378,12 @@
     </div>
   </div>
 
-  <!-- ============ KV VIEW ============ -->
-  <div class="view hidden" id="view-kv">
+  <!-- ============ COMPLETED PROJECTS VIEW ============ -->
+  <div class="view hidden" id="view-completed">
     <div class="grid-panel">
-      <h3>🗺️ Distributed KV Store — 14-Day Roadmap</h3>
-      <div class="sub">Pre-plan foundation work — already in progress. Repo: <a href="https://github.com/arundhaas1/distributed-kv-store" target="_blank">github.com/arundhaas1/distributed-kv-store</a></div>
-      <div class="kv-summary" id="kvSummary"></div>
-      <table class="kv-table" id="kvTable"></table>
+      <h3>✅ Completed Projects</h3>
+      <div class="sub">Shipped to GitHub. Roadmaps and details live in each repo's README.</div>
+      <div id="completedList"></div>
     </div>
   </div>
 
@@ -3145,6 +3144,41 @@ function shipNextKvDay() {
   if (typeof renderMatrix === 'function') renderMatrix();
 }
 
+function renderCompletedView() {
+  const projects = [
+    {
+      name: "Distributed KV Store",
+      emoji: "🗄️",
+      meta: "14/14 days · 151 tests · Java",
+      summary: "WAL + snapshot recovery, consistent-hash sharding (dormant), single-Raft-group replication with leader election, log replication, partition recovery, and microbenchmarks.",
+      repo: "https://github.com/arundhaas1/distributed-kv-store",
+      completedOn: "2026-05-02"
+    }
+  ];
+
+  const list = document.getElementById("completedList");
+  if (!list) return;
+
+  if (projects.length === 0) {
+    list.innerHTML = `<div style="padding:30px; text-align:center; color:var(--muted); font-size:13px;">No completed projects yet.</div>`;
+    return;
+  }
+
+  list.innerHTML = projects.map(p => `
+    <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-top:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; gap:12px; flex-wrap:wrap;">
+        <div>
+          <span style="font-size:17px; font-weight:700; color:var(--ink);">${p.emoji} ${p.name}</span>
+          <span style="margin-left:8px; font-size:10px; padding:2px 8px; background:#e8f5e9; color:#2e7d32; border-radius:9px; font-weight:700; vertical-align:middle;">SHIPPED</span>
+        </div>
+        <a href="${p.repo}" target="_blank" style="font-size:12px; color:var(--gold); text-decoration:none; font-weight:600;">GitHub ↗</a>
+      </div>
+      <div style="font-size:11px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.4px; font-weight:600;">${p.meta} · completed ${p.completedOn}</div>
+      <div style="font-size:13px; color:var(--ink-soft); line-height:1.5;">${p.summary}</div>
+    </div>
+  `).join('');
+}
+
 function renderKVView() {
   const shippedCount = KV_ROADMAP.filter(k => kvStatus(k.day) === 'shipped').length;
   const total = KV_ROADMAP.length;
@@ -3639,14 +3673,14 @@ function renderAll() {
   if (active === "prep") renderPrepView();
   if (active === "health") renderHealthView();
   if (active === "study") renderStudyView();
-  if (active === "kv") renderKVView();
   if (active === "notifier") renderNotifierView();
+  if (active === "completed") renderCompletedView();
 }
 
 ////////////////////////////////////////////////////////////////////////
 // VIEW SWITCH (hash-based routing — bookmarkable URLs)
 ////////////////////////////////////////////////////////////////////////
-const VALID_VIEWS = ["overview", "interview", "apps", "prep", "health", "study", "kv", "notifier"];
+const VALID_VIEWS = ["overview", "interview", "apps", "prep", "health", "study", "notifier", "completed"];
 const DEFAULT_VIEW = "overview";
 
 function viewFromHash() {
