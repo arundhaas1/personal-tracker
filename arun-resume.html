@@ -398,7 +398,7 @@
         <a class="project-link" href="https://github.com/arundhaas1/distributed-kv-store" target="_blank">GitHub ↗</a>
       </div>
       <ul class="bullets">
-        <li>Persistent KV store with <strong class="metric">write-ahead log + snapshot-based recovery</strong>, consistent-hashing sharding across nodes, and <strong class="metric">Raft-style replication</strong> for leader election and log replication. Benchmarked durability under kill-9 and restart scenarios.</li>
+        <li>Persistent KV store with <strong class="metric">write-ahead log + atomic snapshot recovery</strong>; consistent-hash sharding (Day 7–8) replaced by single-Raft-group <strong class="metric">replication</strong> (Day 9–14) with leader election, log replication, and partition recovery. <strong class="metric">151 unit + integration tests</strong>; <strong class="metric">100/100 trials of randomized kill-9 + restart preserved every acknowledged write (0 corruption)</strong>.</li>
       </ul>
     </div>
   </section>
